@@ -1,5 +1,6 @@
 ﻿/* ============================================
-   GESTÃO BE E MILA - Application Logic v2.0
+   GESTÃO BE E MILA - Application Logic v2.1
+   SEGURANÇA REFORÇADA
    ============================================ */
 
 // ===== SUPABASE CONFIG =====
@@ -8,17 +9,72 @@ const SUPABASE_ANON_KEY = 'sb_publishable_s8RlVo0V54IBl4lHvi9RyA_ZVM6vFr2';
 let supabaseClient = null, useSupabase = false;
 try { supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); useSupabase = true; } catch (e) { useSupabase = false; }
 
+// ===== SECURITY: SHA-256 Hashing =====
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ===== SECURITY: XSS Protection =====
+function escapeHtml(str) {
+    if (!str) return '';
+    const s = String(str);
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+// ===== SECURITY: Rate Limiting =====
+const loginRateLimit = { attempts: 0, lastAttempt: 0, lockedUntil: 0 };
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 60000; // 60 seconds
+function checkRateLimit() {
+    const now = Date.now();
+    if (loginRateLimit.lockedUntil > now) {
+        const secsLeft = Math.ceil((loginRateLimit.lockedUntil - now) / 1000);
+        return { blocked: true, message: `Muitas tentativas. Aguarde ${secsLeft}s.` };
+    }
+    if (now - loginRateLimit.lastAttempt > LOCKOUT_DURATION) {
+        loginRateLimit.attempts = 0;
+    }
+    return { blocked: false };
+}
+function recordLoginAttempt(success) {
+    const now = Date.now();
+    if (success) { loginRateLimit.attempts = 0; loginRateLimit.lockedUntil = 0; return; }
+    loginRateLimit.attempts++;
+    loginRateLimit.lastAttempt = now;
+    if (loginRateLimit.attempts >= MAX_LOGIN_ATTEMPTS) {
+        loginRateLimit.lockedUntil = now + LOCKOUT_DURATION;
+    }
+}
+
+// ===== SECURITY: Session Timeout (30 min) =====
+let sessionTimer = null;
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+function resetSessionTimer() {
+    if (sessionTimer) clearTimeout(sessionTimer);
+    if (!currentUser) return;
+    sessionTimer = setTimeout(() => {
+        if (currentUser) {
+            currentUser = null; expenses = []; fixedCosts = [];
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('loginError').textContent = 'Sessão expirada. Faça login novamente.';
+        }
+    }, SESSION_TIMEOUT);
+}
+['click', 'keydown', 'mousemove', 'scroll'].forEach(evt => {
+    document.addEventListener(evt, () => { if (currentUser) resetSessionTimer(); }, { passive: true });
+});
+
 // ===== APP STATE =====
-let currentUser = null, expenses = [], fixedCosts = [], userBalance = 0, userSavings = 0;
+let currentUser = null, currentUserHash = null, expenses = [], fixedCosts = [];
+let userBalance = 0, userSavings = 0;
 let savingsGoal = 0, savingsGoalDesc = '', creditCardLimit = 0, creditCardBill = 0;
 let adminBalances = { marcos: 0, camila: 0 }, pendingUsers = [];
 let dashCategoryChartInstance = null, evoMonthlyChartInstance = null;
 let evoCategoryChartInstance = null, evoDailyChartInstance = null, ccGaugeChartInstance = null;
-
-const ADMIN_SEEDS = [
-    { username: 'marcos', password: '290902', displayName: 'Marcos', email: 'marcos@bemila.com', is_admin: true, is_approved: true },
-    { username: 'camila', password: '080805', displayName: 'Camila', email: 'camila@bemila.com', is_admin: true, is_approved: true }
-];
 
 const CATEGORIES = {
     alimentacao: { label: 'Alimentação', emoji: '🍽️', color: '#ff6b6b' },
@@ -249,23 +305,31 @@ async function saveCreditCard() {
     localStorage.setItem(`bemila_creditcard_${currentUser.username}`, JSON.stringify({ card_limit: creditCardLimit, current_bill: creditCardBill }));
 }
 
-// ===== PENDING USERS (Admin Approval) =====
+// ===== PENDING USERS (Admin Approval via RPC) =====
 async function loadPendingUsers() {
-    if (useSupabase) {
+    if (useSupabase && currentUserHash) {
         try {
-            const { data, error } = await supabaseClient.from('users').select('*').eq('is_approved', false).order('created_at', { ascending: false });
+            const { data, error } = await supabaseClient.rpc('get_pending_users', {
+                p_admin_username: currentUser.username,
+                p_admin_hash: currentUserHash
+            });
             if (error) throw error;
-            pendingUsers = data || []; return;
-        } catch (e) { }
+            if (data && data.success) { pendingUsers = data.users || []; return; }
+        } catch (e) { console.warn('RPC get_pending_users failed:', e); }
     }
     const stored = JSON.parse(localStorage.getItem('bemila_users') || '[]');
     pendingUsers = stored.filter(u => !u.is_approved);
 }
 
 async function approveUser(username) {
-    if (useSupabase) {
+    if (useSupabase && currentUserHash) {
         try {
-            await supabaseClient.from('users').update({ is_approved: true }).eq('username', username);
+            const { data, error } = await supabaseClient.rpc('approve_user', {
+                p_admin_username: currentUser.username,
+                p_admin_hash: currentUserHash,
+                p_target_username: username
+            });
+            if (error) throw error;
             await loadPendingUsers(); return;
         } catch (e) { }
     }
@@ -276,9 +340,14 @@ async function approveUser(username) {
 }
 
 async function rejectUser(username) {
-    if (useSupabase) {
+    if (useSupabase && currentUserHash) {
         try {
-            await supabaseClient.from('users').delete().eq('username', username).eq('is_approved', false);
+            const { data, error } = await supabaseClient.rpc('reject_user', {
+                p_admin_username: currentUser.username,
+                p_admin_hash: currentUserHash,
+                p_target_username: username
+            });
+            if (error) throw error;
             await loadPendingUsers(); return;
         } catch (e) { }
     }
@@ -309,59 +378,85 @@ document.getElementById('btnShowLogin').addEventListener('click', () => {
     registerError.textContent = '';
 });
 
-async function authenticateUser(username, password) {
+async function authenticateUser(username, passwordHash) {
     if (useSupabase) {
         try {
-            const { data, error } = await supabaseClient.from('users').select('*').eq('username', username).single();
-            if (error || !data) return null;
-            if (data.password_hash === password) {
-                if (!data.is_approved && !data.is_admin) return { error: 'pending' };
-                return { username: data.username, displayName: data.display_name, is_admin: data.is_admin, email: data.email, is_approved: data.is_approved };
+            const { data, error } = await supabaseClient.rpc('authenticate_user', {
+                p_username: username,
+                p_password_hash: passwordHash
+            });
+            if (error) throw error;
+            if (!data || !data.success) {
+                if (data && data.error === 'pending_approval') return { error: 'pending' };
+                return null;
             }
-            return null;
-        } catch (e) { }
+            return {
+                username: data.username, displayName: data.displayName || data.display_name,
+                is_admin: data.is_admin, email: data.email, is_approved: data.is_approved
+            };
+        } catch (e) { console.warn('RPC auth failed:', e); }
     }
-    const seed = ADMIN_SEEDS.find(u => u.username === username && u.password === password);
-    if (seed) return seed;
+    // Fallback localStorage (senhas já devem ser hash)
     const stored = JSON.parse(localStorage.getItem('bemila_users') || '[]');
-    const user = stored.find(u => u.username === username && u.password === password);
+    const user = stored.find(u => u.username === username && u.passwordHash === passwordHash);
     if (user && !user.is_approved) return { error: 'pending' };
     return user || null;
 }
 
-async function registerUser(username, email, password, displayName) {
+async function registerUser(username, email, passwordHash, displayName) {
     if (useSupabase) {
         try {
-            const { data: existing } = await supabaseClient.from('users').select('id').or(`username.eq.${username},email.eq.${email}`);
-            if (existing && existing.length > 0) return { error: 'Usuário ou email já existe!' };
-            const { error } = await supabaseClient.from('users').insert({ username, email, password_hash: password, display_name: displayName || username, is_admin: false, is_approved: false });
-            if (error) return { error: error.message };
+            const { data, error } = await supabaseClient.rpc('register_user', {
+                p_username: username,
+                p_email: email,
+                p_password_hash: passwordHash,
+                p_display_name: displayName || username
+            });
+            if (error) throw error;
+            if (!data || !data.success) {
+                if (data && data.error === 'user_exists') return { error: 'Usuário ou email já existe!' };
+                return { error: data ? data.error : 'Erro desconhecido' };
+            }
             return { success: true };
-        } catch (e) { return { error: 'Erro ao conectar.' }; }
+        } catch (e) { return { error: 'Erro ao conectar: ' + e.message }; }
     }
     const stored = JSON.parse(localStorage.getItem('bemila_users') || '[]');
-    if (stored.find(u => u.username === username) || ADMIN_SEEDS.find(u => u.username === username)) return { error: 'Usuário já existe!' };
-    stored.push({ username, email, password, displayName: displayName || username, is_admin: false, is_approved: false });
+    if (stored.find(u => u.username === username)) return { error: 'Usuário já existe!' };
+    stored.push({ username, email, passwordHash, displayName: displayName || username, is_admin: false, is_approved: false });
     localStorage.setItem('bemila_users', JSON.stringify(stored));
     return { success: true };
 }
 
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    // Rate limiting check
+    const rl = checkRateLimit();
+    if (rl.blocked) { loginError.textContent = rl.message; return; }
+
     const username = document.getElementById('loginUser').value.trim().toLowerCase();
     const password = document.getElementById('loginPass').value;
-    const user = await authenticateUser(username, password);
+    const passwordHash = await hashPassword(password);
+    const user = await authenticateUser(username, passwordHash);
+
     if (user && user.error === 'pending') {
+        recordLoginAttempt(false);
         loginError.textContent = 'Sua conta aguarda aprovação do administrador.';
         return;
     }
     if (user && !user.error) {
-        currentUser = user; loginError.textContent = '';
+        recordLoginAttempt(true);
+        currentUser = user;
+        currentUserHash = passwordHash;
+        loginError.textContent = '';
         loginScreen.classList.add('hidden'); appContainer.classList.remove('hidden');
-        document.getElementById('sidebarUser').textContent = `Olá, ${user.displayName}`;
+        document.getElementById('sidebarUser').textContent = `Olá, ${escapeHtml(user.displayName)}`;
+        resetSessionTimer();
         initApp();
     } else {
-        loginError.textContent = 'Usuário ou senha incorretos!';
+        recordLoginAttempt(false);
+        const rl2 = checkRateLimit();
+        if (rl2.blocked) { loginError.textContent = rl2.message; }
+        else { loginError.textContent = `Usuário ou senha incorretos! (${MAX_LOGIN_ATTEMPTS - loginRateLimit.attempts} tentativas restantes)`; }
         loginForm.querySelector('.btn-login').style.animation = 'shake 0.4s ease';
         setTimeout(() => { loginForm.querySelector('.btn-login').style.animation = ''; }, 400);
     }
@@ -375,7 +470,9 @@ registerForm.addEventListener('submit', async (e) => {
     const passConfirm = document.getElementById('regPassConfirm').value;
     if (pass !== passConfirm) { registerError.textContent = 'As senhas não coincidem!'; return; }
     if (pass.length < 4) { registerError.textContent = 'Senha deve ter pelo menos 4 caracteres!'; return; }
-    const result = await registerUser(username, email, pass, username);
+    // Hash the password before sending
+    const passwordHash = await hashPassword(pass);
+    const result = await registerUser(username, email, passwordHash, username);
     if (result.error) { registerError.textContent = result.error; return; }
     registerError.textContent = '';
     showToast('Conta criada! Aguarde aprovação do administrador.', 'info');
@@ -389,9 +486,10 @@ document.head.appendChild(shakeStyle);
 
 // ===== LOGOUT =====
 document.getElementById('btnLogout').addEventListener('click', () => {
-    currentUser = null; expenses = []; fixedCosts = []; userBalance = 0; userSavings = 0;
+    currentUser = null; currentUserHash = null; expenses = []; fixedCosts = []; userBalance = 0; userSavings = 0;
     savingsGoal = 0; savingsGoalDesc = ''; creditCardLimit = 0; creditCardBill = 0;
     adminBalances = { marcos: 0, camila: 0 }; pendingUsers = [];
+    if (sessionTimer) clearTimeout(sessionTimer);
     appContainer.classList.add('hidden'); loginScreen.classList.remove('hidden');
     document.getElementById('loginUser').value = ''; document.getElementById('loginPass').value = '';
     loginError.textContent = '';
@@ -474,7 +572,7 @@ function updateDashboard() {
             const cat = getCategoryInfo(e.category);
             const pm = e.payment_method === 'credit' ? '💳' : '🏦';
             const paidBy = isAdmin() && e.paid_by ? (e.paid_by === 'marcos' ? ' 👨' : ' 👩') : '';
-            return `<div class="expense-mini-item"><div class="expense-mini-left"><span class="expense-mini-cat">${cat.emoji}</span><div><span class="expense-mini-desc">${e.description}${paidBy}</span><span class="expense-mini-date">${formatDate(e.expense_date)} ${pm}</span></div></div><span class="expense-mini-amount">- ${formatCurrency(e.amount)}</span></div>`;
+            return `<div class="expense-mini-item"><div class="expense-mini-left"><span class="expense-mini-cat">${cat.emoji}</span><div><span class="expense-mini-desc">${escapeHtml(e.description)}${paidBy}</span><span class="expense-mini-date">${formatDate(e.expense_date)} ${pm}</span></div></div><span class="expense-mini-amount">- ${formatCurrency(e.amount)}</span></div>`;
         }).join('');
     }
     updateDashCategoryChart(monthExps);
@@ -494,7 +592,7 @@ function updateFixedCostAlerts() {
         const cat = getCategoryInfo(fc.category);
         const daysLeft = fc.due_day - dayOfMonth;
         const urgency = daysLeft <= 2 ? 'alert-urgent' : 'alert-warning';
-        return `<div class="fc-alert ${urgency}"><span class="material-icons-round">notifications_active</span><div><strong>${cat.emoji} ${fc.description}</strong><span>${formatCurrency(fc.amount)} - vence ${daysLeft === 0 ? 'HOJE' : 'em ' + daysLeft + ' dia' + (daysLeft > 1 ? 's' : '')} (dia ${fc.due_day})</span></div></div>`;
+        return `<div class="fc-alert ${urgency}"><span class="material-icons-round">notifications_active</span><div><strong>${cat.emoji} ${escapeHtml(fc.description)}</strong><span>${formatCurrency(fc.amount)} - vence ${daysLeft === 0 ? 'HOJE' : 'em ' + daysLeft + ' dia' + (daysLeft > 1 ? 's' : '')} (dia ${fc.due_day})</span></div></div>`;
     }).join('');
 }
 
@@ -549,7 +647,7 @@ function renderExpensesTable() {
         const cat = getCategoryInfo(e.category);
         const paidByLabel = e.paid_by ? (e.paid_by === 'marcos' ? '👨 Marcos' : '👩 Camila') : (e.user_name ? (e.user_name === 'marcos' ? '👨 Marcos' : '👩 Camila') : '');
         const pmLabel = e.payment_method === 'credit' ? '💳 Cartão' : '🏦 Débito';
-        return `<tr><td>${formatDate(e.expense_date)}</td><td><div>${e.description}</div>${isAdmin() ? `<small style="color:var(--text-muted);font-size:0.72rem">${paidByLabel}</small>` : ''}</td><td><span class="category-badge">${cat.emoji} ${cat.label}</span></td><td><span class="payment-badge ${e.payment_method === 'credit' ? 'payment-credit' : 'payment-debit'}">${pmLabel}</span></td><td class="expense-amount">- ${formatCurrency(e.amount)}</td><td><div class="action-btns"><button class="btn-action btn-action-edit" onclick="openEditExpense('${e.id}')" title="Editar"><span class="material-icons-round">edit</span></button><button class="btn-action btn-action-delete" onclick="openDeleteExpense('${e.id}')" title="Excluir"><span class="material-icons-round">delete</span></button></div></td></tr>`;
+        return `<tr><td>${formatDate(e.expense_date)}</td><td><div>${escapeHtml(e.description)}</div>${isAdmin() ? `<small style="color:var(--text-muted);font-size:0.72rem">${paidByLabel}</small>` : ''}</td><td><span class="category-badge">${cat.emoji} ${cat.label}</span></td><td><span class="payment-badge ${e.payment_method === 'credit' ? 'payment-credit' : 'payment-debit'}">${pmLabel}</span></td><td class="expense-amount">- ${formatCurrency(e.amount)}</td><td><div class="action-btns"><button class="btn-action btn-action-edit" onclick="openEditExpense('${e.id}')" title="Editar"><span class="material-icons-round">edit</span></button><button class="btn-action btn-action-delete" onclick="openDeleteExpense('${e.id}')" title="Excluir"><span class="material-icons-round">delete</span></button></div></td></tr>`;
     }).join('');
 }
 
@@ -608,13 +706,13 @@ let deleteTargetId = null, deleteType = 'expense';
 window.openDeleteExpense = function (id) {
     const expense = expenses.find(e => e.id == id); if (!expense) return;
     deleteTargetId = id; deleteType = 'expense';
-    document.getElementById('deleteExpenseDesc').textContent = `${expense.description} - ${formatCurrency(expense.amount)}`;
+    document.getElementById('deleteExpenseDesc').textContent = `${escapeHtml(expense.description)} - ${formatCurrency(expense.amount)}`;
     deleteModal.classList.remove('hidden');
 };
 window.openDeleteFixedCost = function (id) {
     const fc = fixedCosts.find(f => f.id == id); if (!fc) return;
     deleteTargetId = id; deleteType = 'fixedcost';
-    document.getElementById('deleteExpenseDesc').textContent = `${fc.description} - ${formatCurrency(fc.amount)}/mês`;
+    document.getElementById('deleteExpenseDesc').textContent = `${escapeHtml(fc.description)} - ${formatCurrency(fc.amount)}/mês`;
     deleteModal.classList.remove('hidden');
 };
 
@@ -674,7 +772,7 @@ function updateFixedCostsPanel() {
         else if (diff === 0) { statusClass = 'fc-today'; statusText = 'Vence HOJE!'; }
         else if (diff <= 3) { statusClass = 'fc-urgent'; statusText = 'Vence em ' + diff + ' dia' + (diff > 1 ? 's' : ''); }
         else if (diff <= 5) { statusClass = 'fc-soon'; statusText = 'Vence em ' + diff + ' dias'; }
-        return `<div class="fc-card glass-card ${statusClass}"><div class="fc-card-left"><span class="fc-emoji">${cat.emoji}</span><div><strong>${fc.description}</strong><span class="fc-cat">${cat.label}</span></div></div><div class="fc-card-right"><span class="fc-amount">${formatCurrency(fc.amount)}</span><span class="fc-due">${statusText}</span><div class="action-btns"><button class="btn-action btn-action-edit" onclick="openEditFixedCost('${fc.id}')" title="Editar"><span class="material-icons-round">edit</span></button><button class="btn-action btn-action-delete" onclick="openDeleteFixedCost('${fc.id}')" title="Excluir"><span class="material-icons-round">delete</span></button></div></div></div>`;
+        return `<div class="fc-card glass-card ${statusClass}"><div class="fc-card-left"><span class="fc-emoji">${cat.emoji}</span><div><strong>${escapeHtml(fc.description)}</strong><span class="fc-cat">${cat.label}</span></div></div><div class="fc-card-right"><span class="fc-amount">${formatCurrency(fc.amount)}</span><span class="fc-due">${statusText}</span><div class="action-btns"><button class="btn-action btn-action-edit" onclick="openEditFixedCost('${fc.id}')" title="Editar"><span class="material-icons-round">edit</span></button><button class="btn-action btn-action-delete" onclick="openDeleteFixedCost('${fc.id}')" title="Excluir"><span class="material-icons-round">delete</span></button></div></div></div>`;
     }).join('');
 }
 
@@ -723,7 +821,7 @@ function updateCreditCardPanel() {
     const ccExpsList = document.getElementById('ccExpensesList');
     const ccExps = getMonthExpenses().filter(e => e.payment_method === 'credit');
     if (ccExps.length === 0) { ccExpsList.innerHTML = '<div class="empty-state" style="padding:1rem"><p>Nenhuma despesa no cartão este mês</p></div>'; }
-    else { ccExpsList.innerHTML = ccExps.map(e => { const cat = getCategoryInfo(e.category); return `<div class="expense-mini-item"><div class="expense-mini-left"><span class="expense-mini-cat">${cat.emoji}</span><div><span class="expense-mini-desc">${e.description}</span><span class="expense-mini-date">${formatDate(e.expense_date)}</span></div></div><span class="expense-mini-amount">- ${formatCurrency(e.amount)}</span></div>`; }).join(''); }
+    else { ccExpsList.innerHTML = ccExps.map(e => { const cat = getCategoryInfo(e.category); return `<div class="expense-mini-item"><div class="expense-mini-left"><span class="expense-mini-cat">${cat.emoji}</span><div><span class="expense-mini-desc">${escapeHtml(e.description)}</span><span class="expense-mini-date">${formatDate(e.expense_date)}</span></div></div><span class="expense-mini-amount">- ${formatCurrency(e.amount)}</span></div>`; }).join(''); }
 }
 
 function updateCCGaugeChart(pct) {
