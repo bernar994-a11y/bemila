@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Gestão Be e Mila - Controle Financeiro Pessoal</title>
+    <meta name="description"
+        content="Sistema de gestão de custos pessoais inteligente com assistente IA para economia de dinheiro.">
+    <!-- PWA -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Be e Mila">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ==================== LOGIN / REGISTER SCREEN ==================== -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-bg-circles">
+            <div class="circle circle-1"></div>
+            <div class="circle circle-2"></div>
+            <div class="circle circle-3"></div>
+        </div>
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="material-icons-round logo-icon">account_balance_wallet</span>
+                <h1>Gestão <span class="highlight">Be</span> e <span class="highlight">Mila</span></h1>
+                <p class="login-subtitle">Controle financeiro inteligente</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">person</span>
+                    <input type="text" id="loginUser" placeholder="Usuário" autocomplete="off" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">lock</span>
+                    <input type="password" id="loginPass" placeholder="Senha" required>
+                </div>
+                <div id="loginError" class="login-error"></div>
+                <button type="submit" class="btn-login">
+                    <span>Entrar</span>
+                    <span class="material-icons-round">arrow_forward</span>
+                </button>
+            </form>
+
+            <!-- Register Form (hidden by default) -->
+            <form id="registerForm" class="login-form hidden">
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">badge</span>
+                    <input type="text" id="regUsername" placeholder="Nome de usuário" autocomplete="off" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">email</span>
+                    <input type="email" id="regEmail" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">lock</span>
+                    <input type="password" id="regPass" placeholder="Senha (mín. 4 caracteres)" minlength="4" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons-round input-icon">lock</span>
+                    <input type="password" id="regPassConfirm" placeholder="Confirmar senha" minlength="4" required>
+                </div>
+                <div id="registerError" class="login-error"></div>
+                <button type="submit" class="btn-login btn-register">
+                    <span>Criar Conta</span>
+                    <span class="material-icons-round">person_add</span>
+                </button>
+            </form>
+
+            <div class="login-toggle">
+                <button type="button" id="btnShowRegister" class="btn-toggle-auth">
+                    Não tem conta? <strong>Cadastre-se</strong>
+                </button>
+                <button type="button" id="btnShowLogin" class="btn-toggle-auth hidden">
+                    Já tem conta? <strong>Faça login</strong>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN APP ==================== -->
+    <div id="appContainer" class="app-container hidden">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span class="material-icons-round sidebar-logo">account_balance_wallet</span>
+                <div>
+                    <h2 class="sidebar-title">Be e Mila</h2>
+                    <p class="sidebar-user" id="sidebarUser">Olá, Marcos</p>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-panel="dashboard">
+                    <span class="material-icons-round">dashboard</span>
+                    <span>Painel</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="expenses">
+                    <span class="material-icons-round">receipt_long</span>
+                    <span>Despesas</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="fixed-costs">
+                    <span class="material-icons-round">event_repeat</span>
+                    <span>Custos Fixos</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="credit-card">
+                    <span class="material-icons-round">credit_card</span>
+                    <span>Cartão</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="savings">
+                    <span class="material-icons-round">savings</span>
+                    <span>Poupança</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="evolution">
+                    <span class="material-icons-round">trending_up</span>
+                    <span>Evolução</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="ai-assistant">
+                    <span class="material-icons-round">psychology</span>
+                    <span>Assistente IA</span>
+                </a>
+                <a href="#" class="nav-item" data-panel="admin-users" id="navAdminUsers" style="display:none">
+                    <span class="material-icons-round">admin_panel_settings</span>
+                    <span>Usuários</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="btnLogout" class="btn-logout">
+                    <span class="material-icons-round">logout</span>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        <main class="main-content">
+            <!-- Hamburger for mobile -->
+            <button id="btnHamburger" class="btn-hamburger">
+                <span class="material-icons-round">menu</span>
+            </button>
+
+            <!-- ===== DASHBOARD PANEL ===== -->
+            <section id="panel-dashboard" class="panel active">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Painel Financeiro</h1>
+                        <p class="panel-subtitle">Visão geral das suas finanças</p>
+                    </div>
+                    <div class="header-date" id="headerDate"></div>
+                </div>
+
+                <!-- AI Fixed Cost Alerts -->
+                <div id="fixedCostAlerts" class="fixed-cost-alerts hidden"></div>
+
+                <!-- Admin Balance Section (only for marcos/camila) -->
+                <div id="adminBalanceSection" class="admin-balance-section hidden">
+                    <div class="admin-balance-cards">
+                        <div class="admin-balance-card card-marcos">
+                            <div class="admin-balance-avatar">👨</div>
+                            <div class="admin-balance-info">
+                                <span class="admin-balance-name">Marcos</span>
+                                <span class="admin-balance-value" id="marcosBalance">R$ 0,00</span>
+                            </div>
+                            <button class="btn-edit-mini" onclick="openAdminBalanceModal('marcos')"
+                                title="Editar saldo Marcos">
+                                <span class="material-icons-round">edit</span>
+                            </button>
+                        </div>
+                        <div class="admin-balance-card card-camila">
+                            <div class="admin-balance-avatar">👩</div>
+                            <div class="admin-balance-info">
+                                <span class="admin-balance-name">Camila</span>
+                                <span class="admin-balance-value" id="camilaBalance">R$ 0,00</span>
+                            </div>
+                            <button class="btn-edit-mini" onclick="openAdminBalanceModal('camila')"
+                                title="Editar saldo Camila">
+                                <span class="material-icons-round">edit</span>
+                            </button>
+                        </div>
+                        <div class="admin-balance-card card-total">
+                            <div class="admin-balance-avatar">💰</div>
+                            <div class="admin-balance-info">
+                                <span class="admin-balance-name">Total Conjunto</span>
+                                <span class="admin-balance-value" id="totalAdminBalance">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="summary-cards">
+                    <div class="summary-card card-balance">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">account_balance</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Saldo em Conta</span>
+                            <span class="card-value" id="dashBalance">R$ 0,00</span>
+                        </div>
+                        <button class="btn-edit-balance" id="btnEditBalance" title="Atualizar saldo">
+                            <span class="material-icons-round">edit</span>
+                        </button>
+                    </div>
+                    <div class="summary-card card-expenses">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">shopping_cart</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Total Despesas (Mês)</span>
+                            <span class="card-value" id="dashTotalExpenses">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card card-credit">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">credit_card</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Fatura Cartão</span>
+                            <span class="card-value" id="dashCreditBill">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card card-available">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">wallet</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Disponível</span>
+                            <span class="card-value" id="dashAvailable">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card card-savings">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">savings</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Poupança</span>
+                            <span class="card-value" id="dashSavings">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card card-count">
+                        <div class="card-icon-wrap">
+                            <span class="material-icons-round">format_list_numbered</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-label">Lançamentos (Mês)</span>
+                            <span class="card-value" id="dashCount">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicators -->
+                <div class="indicators-grid" id="indicatorsGrid">
+                </div>
+
+                <!-- Mini Chart + Quick AI Tip -->
+                <div class="dashboard-grid">
+                    <div class="dash-chart-card glass-card">
+                        <h3><span class="material-icons-round">bar_chart</span> Despesas por Categoria</h3>
+                        <canvas id="dashCategoryChart"></canvas>
+                    </div>
+                    <div class="dash-ai-card glass-card">
+                        <h3><span class="material-icons-round">tips_and_updates</span> Dica da IA</h3>
+                        <div id="dashAiTip" class="ai-tip-content">
+                            <p>Adicione despesas para receber dicas personalizadas!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Expenses -->
+                <div class="recent-expenses glass-card">
+                    <h3><span class="material-icons-round">history</span> Despesas Recentes</h3>
+                    <div id="recentExpensesList" class="expenses-list-mini"></div>
+                </div>
+            </section>
+
+            <!-- ===== EXPENSES PANEL ===== -->
+            <section id="panel-expenses" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Gerenciar Despesas</h1>
+                        <p class="panel-subtitle">Adicione, edite ou exclua suas despesas</p>
+                    </div>
+                    <button class="btn-primary" id="btnAddExpense">
+                        <span class="material-icons-round">add</span>
+                        <span>Nova Despesa</span>
+                    </button>
+                </div>
+
+                <!-- Balance Section -->
+                <div class="balance-section glass-card">
+                    <div class="balance-display">
+                        <div>
+                            <span class="balance-label">Saldo Atual em Conta</span>
+                            <span class="balance-value" id="expBalance">R$ 0,00</span>
+                        </div>
+                        <button class="btn-secondary" id="btnUpdateBalance">
+                            <span class="material-icons-round">account_balance</span>
+                            <span>Atualizar Saldo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters-bar glass-card">
+                    <div class="filter-group">
+                        <label>Categoria</label>
+                        <select id="filterCategory">
+                            <option value="">Todas</option>
+                            <option value="alimentacao">🍽️ Alimentação</option>
+                            <option value="transporte">🚗 Transporte</option>
+                            <option value="moradia">🏠 Moradia</option>
+                            <option value="saude">💊 Saúde</option>
+                            <option value="educacao">📚 Educação</option>
+                            <option value="lazer">🎮 Lazer</option>
+                            <option value="vestuario">👕 Vestuário</option>
+                            <option value="servicos">🔧 Serviços</option>
+                            <option value="outros">📦 Outros</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Mês</label>
+                        <input type="month" id="filterMonth">
+                    </div>
+                    <div class="filter-group">
+                        <label>Pagamento</label>
+                        <select id="filterPayment">
+                            <option value="">Todos</option>
+                            <option value="debit">💳 Débito em Conta</option>
+                            <option value="credit">💳 Cartão de Crédito</option>
+                        </select>
+                    </div>
+                    <button class="btn-icon" id="btnClearFilters" title="Limpar filtros">
+                        <span class="material-icons-round">filter_alt_off</span>
+                    </button>
+                </div>
+
+                <!-- Expenses Table -->
+                <div class="expenses-table-wrap glass-card">
+                    <table class="expenses-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Pagamento</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expensesTableBody">
+                        </tbody>
+                    </table>
+                    <div id="emptyExpenses" class="empty-state">
+                        <span class="material-icons-round">receipt_long</span>
+                        <p>Nenhuma despesa encontrada</p>
+                        <small>Clique em "Nova Despesa" para adicionar</small>
+                    </div>
+                </div>
+
+                <!-- Expenses Total -->
+                <div class="expenses-total glass-card">
+                    <span>Total filtrado:</span>
+                    <span class="total-value" id="filteredTotal">R$ 0,00</span>
+                </div>
+            </section>
+
+            <!-- ===== FIXED COSTS PANEL ===== -->
+            <section id="panel-fixed-costs" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Custos Fixos</h1>
+                        <p class="panel-subtitle">Despesas recorrentes mensais</p>
+                    </div>
+                    <button class="btn-primary" id="btnAddFixedCost">
+                        <span class="material-icons-round">add</span>
+                        <span>Novo Custo Fixo</span>
+                    </button>
+                </div>
+
+                <!-- Fixed Costs Summary -->
+                <div class="fixed-costs-summary glass-card">
+                    <div class="fc-summary-item">
+                        <span class="material-icons-round" style="color:#667eea">event_repeat</span>
+                        <div>
+                            <span class="fc-summary-label">Total Custos Fixos/Mês</span>
+                            <span class="fc-summary-value" id="fcTotalMonth">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="fc-summary-item">
+                        <span class="material-icons-round" style="color:#ff6b6b">warning</span>
+                        <div>
+                            <span class="fc-summary-label">Próximos Vencimentos</span>
+                            <span class="fc-summary-value" id="fcUpcoming">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fixed Costs List -->
+                <div id="fixedCostsList" class="fixed-costs-list">
+                    <div class="empty-state">
+                        <span class="material-icons-round">event_repeat</span>
+                        <p>Nenhum custo fixo cadastrado</p>
+                        <small>Clique em "Novo Custo Fixo" para adicionar</small>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== CREDIT CARD PANEL ===== -->
+            <section id="panel-credit-card" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Cartão de Crédito</h1>
+                        <p class="panel-subtitle">Gerencie seu limite e fatura</p>
+                    </div>
+                    <button class="btn-primary" id="btnConfigCard">
+                        <span class="material-icons-round">settings</span>
+                        <span>Configurar Cartão</span>
+                    </button>
+                </div>
+
+                <!-- Card Overview -->
+                <div class="credit-card-overview">
+                    <div class="cc-visual-card glass-card">
+                        <div class="cc-card-design">
+                            <div class="cc-card-top">
+                                <span class="material-icons-round">credit_card</span>
+                                <span class="cc-card-label">Cartão de Crédito</span>
+                            </div>
+                            <div class="cc-card-middle">
+                                <span class="cc-card-limit-label">Limite Total</span>
+                                <span class="cc-card-limit-value" id="ccLimitValue">R$ 0,00</span>
+                            </div>
+                            <div class="cc-card-bottom">
+                                <div>
+                                    <span class="cc-card-sub-label">Fatura Atual</span>
+                                    <span class="cc-card-sub-value" id="ccBillValue">R$ 0,00</span>
+                                </div>
+                                <div>
+                                    <span class="cc-card-sub-label">Disponível</span>
+                                    <span class="cc-card-sub-value" id="ccAvailableValue">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cc-gauge-card glass-card">
+                        <h3><span class="material-icons-round">donut_large</span> Uso do Limite</h3>
+                        <div class="cc-gauge-wrap">
+                            <canvas id="ccGaugeChart"></canvas>
+                            <div class="cc-gauge-center">
+                                <span class="cc-gauge-percent" id="ccGaugePercent">0%</span>
+                                <span class="cc-gauge-label">utilizado</span>
+                            </div>
+                        </div>
+                        <div class="cc-gauge-status" id="ccGaugeStatus">Configure seu cartão para ver o uso do limite
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Credit Card Analysis -->
+                <div class="glass-card" style="margin-top:1.2rem">
+                    <h3
+                        style="display:flex;align-items:center;gap:0.5rem;font-size:1rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
+                        <span class="material-icons-round" style="color:#f0b429">psychology</span>
+                        Análise da IA sobre o Cartão
+                    </h3>
+                    <div id="ccAiAnalysis" class="ai-tip-content">
+                        <p>Configure seu cartão de crédito para receber análises personalizadas!</p>
+                    </div>
+                </div>
+
+                <!-- Credit Card Expenses -->
+                <div class="glass-card" style="margin-top:1.2rem">
+                    <h3
+                        style="display:flex;align-items:center;gap:0.5rem;font-size:1rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
+                        <span class="material-icons-round" style="color:#667eea">receipt_long</span>
+                        Despesas no Cartão (Mês)
+                    </h3>
+                    <div id="ccExpensesList" class="expenses-list-mini"></div>
+                </div>
+            </section>
+
+            <!-- ===== SAVINGS / POUPANÇA PANEL ===== -->
+            <section id="panel-savings" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Poupança</h1>
+                        <p class="panel-subtitle">Gerencie sua reserva financeira e defina metas</p>
+                    </div>
+                </div>
+
+                <!-- Savings Overview -->
+                <div class="savings-overview glass-card">
+                    <div class="savings-header">
+                        <h3><span class="material-icons-round">savings</span> Sua Poupança</h3>
+                        <div class="savings-btns">
+                            <button class="btn-savings" id="btnAddSavings">
+                                <span class="material-icons-round">add</span>
+                                <span>Depositar</span>
+                            </button>
+                            <button class="btn-savings-outline" id="btnWithdrawSavings">
+                                <span class="material-icons-round">remove</span>
+                                <span>Retirar</span>
+                            </button>
+                            <button class="btn-savings-outline" id="btnSetGoal">
+                                <span class="material-icons-round">flag</span>
+                                <span>Definir Meta</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="savings-cards">
+                        <div class="savings-info-card">
+                            <span class="savings-info-label">Valor na Poupança</span>
+                            <span class="savings-info-value" id="savingsAmount">R$ 0,00</span>
+                        </div>
+                        <div class="savings-info-card">
+                            <span class="savings-info-label">Meta de Poupança</span>
+                            <span class="savings-info-value" id="savingsGoal">R$ 0,00</span>
+                        </div>
+                        <div class="savings-info-card">
+                            <span class="savings-info-label">Falta para a meta</span>
+                            <span class="savings-info-value" id="savingsRemaining">R$ 0,00</span>
+                        </div>
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="savings-progress-wrap" id="savingsProgressWrap">
+                        <div class="savings-progress-label">
+                            <span>Progresso da Meta</span>
+                            <span id="savingsPercent">0%</span>
+                        </div>
+                        <div class="savings-progress-bar">
+                            <div class="savings-progress-fill" id="savingsProgressFill" style="width: 0%"></div>
+                        </div>
+                        <p class="savings-goal-desc" id="savingsGoalDesc">Defina uma meta para acompanhar seu progresso!
+                        </p>
+                    </div>
+                </div>
+
+                <!-- AI Savings Recommendation -->
+                <div class="glass-card" style="margin-top:1.2rem">
+                    <h3
+                        style="display:flex;align-items:center;gap:0.5rem;font-size:1rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
+                        <span class="material-icons-round" style="color:#f0b429">psychology</span>
+                        Recomendação da IA para Poupança
+                    </h3>
+                    <div id="savingsAiRecommendation" class="ai-tip-content">
+                        <p>Cadastre suas despesas e saldo para receber recomendações personalizadas de quanto guardar na
+                            poupança!</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== EVOLUTION PANEL ===== -->
+            <section id="panel-evolution" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Evolução de Custos</h1>
+                        <p class="panel-subtitle">Acompanhe a evolução dos seus gastos ao longo do tempo</p>
+                    </div>
+                </div>
+
+                <div class="evolution-grid">
+                    <div class="evo-chart-card glass-card">
+                        <h3><span class="material-icons-round">show_chart</span> Evolução Mensal</h3>
+                        <canvas id="evoMonthlyChart"></canvas>
+                    </div>
+                    <div class="evo-chart-card glass-card">
+                        <h3><span class="material-icons-round">donut_large</span> Distribuição por Categoria</h3>
+                        <canvas id="evoCategoryChart"></canvas>
+                    </div>
+                    <div class="evo-chart-card glass-card full-width">
+                        <h3><span class="material-icons-round">stacked_line_chart</span> Tendência Diária (Mês Atual)
+                        </h3>
+                        <canvas id="evoDailyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="evo-stats">
+                    <div class="evo-stat glass-card">
+                        <span class="material-icons-round">trending_up</span>
+                        <div>
+                            <span class="stat-label">Maior Despesa</span>
+                            <span class="stat-value" id="evoHighest">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="evo-stat glass-card">
+                        <span class="material-icons-round">calculate</span>
+                        <div>
+                            <span class="stat-label">Média por Despesa</span>
+                            <span class="stat-value" id="evoAverage">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="evo-stat glass-card">
+                        <span class="material-icons-round">category</span>
+                        <div>
+                            <span class="stat-label">Categoria Mais Cara</span>
+                            <span class="stat-value" id="evoTopCategory">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== AI ASSISTANT PANEL ===== -->
+            <section id="panel-ai-assistant" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Assistente IA Financeiro</h1>
+                        <p class="panel-subtitle">Inteligência artificial para ajudar você a economizar</p>
+                    </div>
+                    <button class="btn-primary" id="btnRefreshAI">
+                        <span class="material-icons-round">refresh</span>
+                        <span>Atualizar Análise</span>
+                    </button>
+                </div>
+
+                <!-- AI Score -->
+                <div class="ai-score-card glass-card">
+                    <div class="ai-score-circle">
+                        <svg viewBox="0 0 120 120">
+                            <circle class="score-bg" cx="60" cy="60" r="52"></circle>
+                            <circle class="score-fill" id="aiScoreCircle" cx="60" cy="60" r="52"></circle>
+                        </svg>
+                        <div class="score-text">
+                            <span id="aiScoreValue">0</span>
+                            <small>/ 100</small>
+                        </div>
+                    </div>
+                    <div class="ai-score-info">
+                        <h3>Saúde Financeira</h3>
+                        <p id="aiScoreDesc">Adicione despesas e saldo para receber sua avaliação.</p>
+                    </div>
+                </div>
+
+                <!-- AI Tips -->
+                <div class="ai-tips-grid" id="aiTipsGrid">
+                </div>
+
+                <!-- AI Chat-like suggestions -->
+                <div class="ai-chat glass-card">
+                    <h3><span class="material-icons-round">smart_toy</span> Análise Personalizada</h3>
+                    <div id="aiChatMessages" class="ai-chat-messages">
+                        <div class="ai-message">
+                            <span class="material-icons-round">psychology</span>
+                            <p>Olá! Sou seu assistente financeiro inteligente. Adicione suas despesas e saldo para que
+                                eu possa analisar seus gastos e dar dicas personalizadas de economia!</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== ADMIN USERS PANEL ===== -->
+            <section id="panel-admin-users" class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h1 class="panel-title">Gerenciar Usuários</h1>
+                        <p class="panel-subtitle">Aprovar ou rejeitar registros de novos usuários</p>
+                    </div>
+                    <div class="header-date">
+                        <span class="material-icons-round" style="font-size:1.1rem;color:var(--primary)">people</span>
+                        <span>Pendentes: <strong id="pendingCount">0</strong></span>
+                    </div>
+                </div>
+                <div id="pendingUsersList" class="pending-users-list">
+                    <div class="empty-state" style="padding:2rem">
+                        <span class="material-icons-round">verified_user</span>
+                        <p>Nenhum usuário pendente</p>
+                        <small>Todos os registros foram processados</small>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Expense Modal -->
+    <div id="expenseModal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="expenseModalTitle">Nova Despesa</h2>
+                <button class="btn-close-modal" id="btnCloseExpenseModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="expenseForm" class="modal-form">
+                <input type="hidden" id="expenseId">
+                <div class="form-group">
+                    <label for="expDescription">Descrição</label>
+                    <input type="text" id="expDescription" placeholder="Ex: Supermercado, Gasolina..." required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expCategory">Categoria</label>
+                        <select id="expCategory" required>
+                            <option value="">Selecione</option>
+                            <option value="alimentacao">🍽️ Alimentação</option>
+                            <option value="transporte">🚗 Transporte</option>
+                            <option value="moradia">🏠 Moradia</option>
+                            <option value="saude">💊 Saúde</option>
+                            <option value="educacao">📚 Educação</option>
+                            <option value="lazer">🎮 Lazer</option>
+                            <option value="vestuario">👕 Vestuário</option>
+                            <option value="servicos">🔧 Serviços</option>
+                            <option value="outros">📦 Outros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expAmount">Valor (R$)</label>
+                        <input type="number" id="expAmount" step="0.01" min="0.01" placeholder="0,00" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expDate">Data</label>
+                        <input type="date" id="expDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expPaymentMethod">Forma de Pagamento</label>
+                        <select id="expPaymentMethod" required>
+                            <option value="debit">💳 Débito em Conta</option>
+                            <option value="credit">💳 Cartão de Crédito</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Admin only: paid_by field -->
+                <div class="form-group" id="paidByGroup" style="display:none">
+                    <label for="expPaidBy">De qual conta?</label>
+                    <select id="expPaidBy">
+                        <option value="marcos">👨 Marcos</option>
+                        <option value="camila">👩 Camila</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelExpense">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons-round">save</span>
+                        <span>Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Balance Modal -->
+    <div id="balanceModal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 id="balanceModalTitle">Atualizar Saldo</h2>
+                <button class="btn-close-modal" id="btnCloseBalanceModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="balanceForm" class="modal-form">
+                <input type="hidden" id="balanceTargetUser" value="">
+                <div class="form-group">
+                    <label for="balanceAmount" id="balanceAmountLabel">Saldo em Conta (R$)</label>
+                    <input type="number" id="balanceAmount" step="0.01" min="0" placeholder="0,00" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelBalance">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons-round">save</span>
+                        <span>Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Fixed Cost Modal -->
+    <div id="fixedCostModal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="fixedCostModalTitle">Novo Custo Fixo</h2>
+                <button class="btn-close-modal" id="btnCloseFixedCostModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="fixedCostForm" class="modal-form">
+                <input type="hidden" id="fixedCostId">
+                <div class="form-group">
+                    <label for="fcDescription">Descrição</label>
+                    <input type="text" id="fcDescription" placeholder="Ex: Aluguel, Internet, Energia..." required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fcCategory">Categoria</label>
+                        <select id="fcCategory" required>
+                            <option value="">Selecione</option>
+                            <option value="moradia">🏠 Moradia</option>
+                            <option value="servicos">🔧 Serviços</option>
+                            <option value="transporte">🚗 Transporte</option>
+                            <option value="saude">💊 Saúde</option>
+                            <option value="educacao">📚 Educação</option>
+                            <option value="outros">📦 Outros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="fcAmount">Valor (R$)</label>
+                        <input type="number" id="fcAmount" step="0.01" min="0.01" placeholder="0,00" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="fcDueDay">Dia de Vencimento (1-31)</label>
+                    <input type="number" id="fcDueDay" min="1" max="31" placeholder="10" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelFixedCost">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons-round">save</span>
+                        <span>Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Credit Card Config Modal -->
+    <div id="creditCardModal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Configurar Cartão de Crédito</h2>
+                <button class="btn-close-modal" id="btnCloseCreditCardModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="creditCardForm" class="modal-form">
+                <div class="form-group">
+                    <label for="ccLimit">Limite do Cartão (R$)</label>
+                    <input type="number" id="ccLimit" step="0.01" min="0" placeholder="0,00" required>
+                </div>
+                <div class="form-group">
+                    <label for="ccBill">Fatura Atual (R$)</label>
+                    <input type="number" id="ccBill" step="0.01" min="0" placeholder="0,00" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelCreditCard">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons-round">save</span>
+                        <span>Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Savings Deposit/Withdraw Modal -->
+    <div id="savingsModal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 id="savingsModalTitle">Depositar na Poupança</h2>
+                <button class="btn-close-modal" id="btnCloseSavingsModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="savingsForm" class="modal-form">
+                <input type="hidden" id="savingsAction" value="deposit">
+                <div class="form-group">
+                    <label for="savingsValue" id="savingsValueLabel">Valor a depositar (R$)</label>
+                    <input type="number" id="savingsValue" step="0.01" min="0.01" placeholder="0,00" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelSavings">Cancelar</button>
+                    <button type="submit" class="btn-primary" id="btnSavingsSubmit">
+                        <span class="material-icons-round">savings</span>
+                        <span>Depositar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Savings Goal Modal -->
+    <div id="goalModal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Definir Meta de Poupança</h2>
+                <button class="btn-close-modal" id="btnCloseGoalModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="goalForm" class="modal-form">
+                <div class="form-group">
+                    <label for="goalAmount">Valor da Meta (R$)</label>
+                    <input type="number" id="goalAmount" step="0.01" min="0" placeholder="0,00" required>
+                </div>
+                <div class="form-group">
+                    <label for="goalDescription">Descrição da Meta</label>
+                    <input type="text" id="goalDescription" placeholder="Ex: Viagem, Carro novo, Reserva...">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="btnCancelGoal">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons-round">flag</span>
+                        <span>Salvar Meta</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header modal-header-danger">
+                <h2>Excluir Item</h2>
+                <button class="btn-close-modal" id="btnCloseDeleteModal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir este item?</p>
+                <p class="delete-desc" id="deleteExpenseDesc"></p>
+            </div>
+            <div class="modal-actions" style="padding: 0 1.5rem 1.5rem">
+                <button class="btn-cancel" id="btnCancelDelete">Cancelar</button>
+                <button class="btn-danger" id="btnConfirmDelete">
+                    <span class="material-icons-round">delete</span>
+                    <span>Excluir</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+        <span class="material-icons-round toast-icon" id="toastIcon">check_circle</span>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('✅ SW registered:', reg.scope))
+                    .catch(err => console.warn('⚠️ SW registration failed:', err));
+            });
+        }
+
+        // Hamburger menu
+        const hamburgerBtn = document.getElementById('btnHamburger');
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        if (hamburgerBtn) {
+            hamburgerBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+                sidebarOverlay.classList.toggle('active');
+            });
+        }
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+                sidebarOverlay.classList.remove('active');
+            });
+        }
+        // Close sidebar on nav click (mobile)
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.remove('open');
+                    sidebarOverlay.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
