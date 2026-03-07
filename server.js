@@ -1,4 +1,4 @@
-// ===== SERVIDOR LOCAL - Gestão Be e Mila =====
+// ===== SERVIDOR LOCAL - BM Gestão Financeira =====
 // Execute: node server.js
 // Acesse: http://localhost:3000 (local) ou http://SEU_IP:3000 (rede)
 
@@ -68,7 +68,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('╔═══════════════════════════════════════════════╗');
-    console.log('║     🏦 Gestão Be e Mila - Servidor Local     ║');
+    console.log('║     🏦 BM Gestão Financeira - Servidor Local     ║');
     console.log('╠═══════════════════════════════════════════════╣');
     console.log(`║  Local:   http://localhost:${PORT}              ║`);
 

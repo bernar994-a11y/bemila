@@ -5,41 +5,41 @@
 
 /* --- CSS Variables --- */
 :root {
-    --bg-main: #f0f2f8;
-    --bg-sidebar: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-    --bg-card: rgba(255, 255, 255, 0.85);
+    --bg-main: #f8fafc;
+    --bg-sidebar: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    --bg-card: rgba(255, 255, 255, 0.92);
     --bg-card-solid: #ffffff;
-    --glass-border: rgba(255, 255, 255, 0.6);
-    --glass-shadow: 0 8px 32px rgba(102, 126, 234, 0.08);
-    --glass-shadow-hover: 0 12px 40px rgba(102, 126, 234, 0.15);
+    --glass-border: rgba(226, 232, 240, 0.8);
+    --glass-shadow: 0 8px 32px rgba(15, 23, 42, 0.06);
+    --glass-shadow-hover: 0 12px 40px rgba(15, 23, 42, 0.12);
 
-    --primary: #667eea;
-    --primary-light: #8b9cf7;
-    --primary-dark: #4c5fd5;
-    --secondary: #764ba2;
-    --accent: #f093fb;
-    --accent-light: #f5b7fd;
+    --primary: #3b82f6;
+    --primary-light: #60a5fa;
+    --primary-dark: #2563eb;
+    --secondary: #475569;
+    --accent: #6366f1;
+    --accent-light: #818cf8;
 
-    --success: #4ecdc4;
-    --success-light: #a8edea;
-    --warning: #ffd93d;
-    --warning-light: #fff3b0;
-    --danger: #ff6b6b;
-    --danger-light: #ffc4c4;
-    --info: #74b9ff;
-    --info-light: #dfe6e9;
+    --success: #10b981;
+    --success-light: #a7f3d0;
+    --warning: #f59e0b;
+    --warning-light: #fef3c7;
+    --danger: #ef4444;
+    --danger-light: #fecaca;
+    --info: #3b82f6;
+    --info-light: #dbeafe;
 
-    --text-primary: #2d3436;
-    --text-secondary: #636e72;
-    --text-muted: #b2bec3;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
     --text-on-primary: #ffffff;
 
-    --card-balance: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --card-expenses: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-    --card-available: linear-gradient(135deg, #4ecdc4 0%, #44bd9e 100%);
-    --card-count: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --card-savings: linear-gradient(135deg, #ffd93d 0%, #f0b429 100%);
-    --card-credit: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    --card-balance: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    --card-expenses: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    --card-available: linear-gradient(135deg, #059669 0%, #047857 100%);
+    --card-count: linear-gradient(135deg, #475569 0%, #334155 100%);
+    --card-savings: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    --card-credit: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
 
     --radius-sm: 8px;
     --radius-md: 12px;
@@ -2477,4 +2477,100 @@ body {
         flex: 1;
         justify-content: center;
     }
+}
+
+/* ============================================
+   GOOGLE LOGIN BUTTON
+   ============================================ */
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.2rem 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(148, 163, 184, 0.3);
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    background: #ffffff;
+    color: #374151;
+    border: 1.5px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    font-family: var(--font);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-google:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+
+/* ============================================
+   SHARED ACCOUNT CHECKBOX
+   ============================================ */
+.shared-account-group {
+    margin: 0.8rem 0;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+/* ============================================
+   INCOME BUTTON
+   ============================================ */
+.btn-income {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    background: linear-gradient(135deg, #059669, #047857);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-income:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(5, 150, 105, 0.3);
+}
+
+.btn-income .material-icons-round {
+    font-size: 1.2rem;
 }

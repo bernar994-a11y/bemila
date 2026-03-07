@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT NOT NULL,
     is_admin BOOLEAN DEFAULT false,
     is_approved BOOLEAN DEFAULT false,
+    shared_with TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -161,7 +162,7 @@ AS $$
 DECLARE
     user_record RECORD;
 BEGIN
-    SELECT username, display_name, email, is_admin, is_approved
+    SELECT username, display_name, email, is_admin, is_approved, shared_with
     INTO user_record
     FROM users
     WHERE username = p_username AND password_hash = p_password_hash;
@@ -180,13 +181,14 @@ BEGIN
         'displayName', user_record.display_name,
         'email', user_record.email,
         'is_admin', user_record.is_admin,
-        'is_approved', user_record.is_approved
+        'is_approved', user_record.is_approved,
+        'shared_with', COALESCE(user_record.shared_with, '')
     );
 END;
 $$;
 
 -- Função para registrar usuário (hash vem do cliente)
-CREATE OR REPLACE FUNCTION register_user(p_username TEXT, p_email TEXT, p_password_hash TEXT, p_display_name TEXT)
+CREATE OR REPLACE FUNCTION register_user(p_username TEXT, p_email TEXT, p_password_hash TEXT, p_display_name TEXT, p_shared_with TEXT DEFAULT '')
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -202,8 +204,8 @@ BEGIN
         RETURN json_build_object('success', false, 'error', 'user_exists');
     END IF;
 
-    INSERT INTO users (username, email, password_hash, display_name, is_admin, is_approved)
-    VALUES (p_username, p_email, p_password_hash, p_display_name, false, false);
+    INSERT INTO users (username, email, password_hash, display_name, is_admin, is_approved, shared_with)
+    VALUES (p_username, p_email, p_password_hash, p_display_name, false, false, COALESCE(p_shared_with, ''));
 
     RETURN json_build_object('success', true);
 END;

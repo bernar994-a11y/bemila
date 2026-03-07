@@ -93,9 +93,13 @@ function formatCurrency(v) { return new Intl.NumberFormat('pt-BR', { style: 'cur
 function formatDate(d) { return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR'); }
 function getCurrentMonthStr() { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; }
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 9); }
-function isAdmin() { return currentUser && currentUser.is_admin; }
+function isAdmin() { return currentUser && (currentUser.is_admin || currentUser.shared_with); }
 function isMainAdmin() { return currentUser && currentUser.username === 'marcos'; }
-function getAdminUsers() { return ['marcos', 'camila']; }
+function getAdminUsers() {
+    if (currentUser && currentUser.is_admin) return ['marcos', 'camila'];
+    if (currentUser && currentUser.shared_with) return [currentUser.username, currentUser.shared_with];
+    return [currentUser ? currentUser.username : ''];
+}
 
 // ===== STORAGE FUNCTIONS =====
 async function loadExpenses() {
@@ -403,7 +407,7 @@ async function authenticateUser(username, passwordHash) {
     return user || null;
 }
 
-async function registerUser(username, email, passwordHash, displayName) {
+async function registerUser(username, email, passwordHash, displayName, sharedWith) {
     if (useSupabase) {
         try {
             const { data, error } = await supabaseClient.rpc('register_user', {
@@ -422,7 +426,7 @@ async function registerUser(username, email, passwordHash, displayName) {
     }
     const stored = JSON.parse(localStorage.getItem('bemila_users') || '[]');
     if (stored.find(u => u.username === username)) return { error: 'Usuário já existe!' };
-    stored.push({ username, email, passwordHash, displayName: displayName || username, is_admin: false, is_approved: false });
+    stored.push({ username, email, passwordHash, displayName: displayName || username, is_admin: false, is_approved: false, shared_with: sharedWith || '' });
     localStorage.setItem('bemila_users', JSON.stringify(stored));
     return { success: true };
 }
@@ -472,7 +476,8 @@ registerForm.addEventListener('submit', async (e) => {
     if (pass.length < 4) { registerError.textContent = 'Senha deve ter pelo menos 4 caracteres!'; return; }
     // Hash the password before sending
     const passwordHash = await hashPassword(pass);
-    const result = await registerUser(username, email, passwordHash, username);
+    const sharedWith = document.getElementById('regSharedAccount').checked ? document.getElementById('regPartnerUsername').value.trim().toLowerCase() : '';
+    const result = await registerUser(username, email, passwordHash, username, sharedWith);
     if (result.error) { registerError.textContent = result.error; return; }
     registerError.textContent = '';
     showToast('Conta criada! Aguarde aprovação do administrador.', 'info');
@@ -480,9 +485,73 @@ registerForm.addEventListener('submit', async (e) => {
     document.getElementById('loginUser').value = username;
 });
 
+
+// ===== SHARED ACCOUNT TOGGLE =====
+const regSharedCheckbox = document.getElementById('regSharedAccount');
+const sharedPartnerField = document.getElementById('sharedPartnerField');
+if (regSharedCheckbox) {
+    regSharedCheckbox.addEventListener('change', () => {
+        if (regSharedCheckbox.checked) sharedPartnerField.classList.remove('hidden');
+        else sharedPartnerField.classList.add('hidden');
+    });
+}
+
 const shakeStyle = document.createElement('style');
 shakeStyle.textContent = `@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`;
 document.head.appendChild(shakeStyle);
+
+
+// ===== GOOGLE LOGIN =====
+const btnGoogleLogin = document.getElementById('btnGoogleLogin');
+if (btnGoogleLogin) {
+    btnGoogleLogin.addEventListener('click', async () => {
+        if (!useSupabase) {
+            loginError.textContent = 'Login com Google requer Supabase configurado.';
+            return;
+        }
+        try {
+            const { data, error } = await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
+            if (error) throw error;
+        } catch (e) {
+            loginError.textContent = 'Erro ao conectar com Google: ' + e.message;
+        }
+    });
+}
+
+// Check for Google auth redirect on page load
+async function checkGoogleAuth() {
+    if (!useSupabase) return;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+            const googleUser = session.user;
+            const username = googleUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Check if user exists in our users table via RPC
+            const passwordHash = await hashPassword(googleUser.id);
+            const authResult = await authenticateUser(username, passwordHash);
+            if (authResult && !authResult.error) {
+                currentUser = authResult;
+                currentUserHash = passwordHash;
+                loginScreen.classList.add('hidden'); appContainer.classList.remove('hidden');
+                document.getElementById('sidebarUser').textContent = 'Olá, ' + escapeHtml(authResult.displayName);
+                resetSessionTimer(); initApp();
+            } else {
+                // Auto-register Google user
+                const regResult = await registerUser(username, googleUser.email, passwordHash, googleUser.user_metadata.full_name || username, '');
+                if (regResult.success) {
+                    loginError.textContent = 'Conta Google criada! Aguarde aprovação do administrador.';
+                } else if (regResult.error === 'Usuário ou email já existe!') {
+                    // User exists but might have pending approval
+                    loginError.textContent = 'Sua conta aguarda aprovação do administrador.';
+                }
+            }
+        }
+    } catch (e) { console.warn('Google auth check:', e); }
+}
+checkGoogleAuth();
 
 // ===== LOGOUT =====
 document.getElementById('btnLogout').addEventListener('click', () => {
@@ -861,6 +930,45 @@ creditCardForm.addEventListener('submit', async (e) => {
     showToast('Cartão configurado!', 'success');
 });
 
+
+
+// ===== INCOME MODAL =====
+const incomeModal = document.getElementById('incomeModal');
+const incomeForm = document.getElementById('incomeForm');
+document.getElementById('btnAddIncome').addEventListener('click', () => {
+    incomeForm.reset();
+    if (isAdmin() && currentUser.is_admin) {
+        document.getElementById('incomeTargetGroup').style.display = '';
+        document.getElementById('incomeTarget').value = currentUser.username;
+    } else if (currentUser.shared_with) {
+        document.getElementById('incomeTargetGroup').style.display = '';
+    } else {
+        document.getElementById('incomeTargetGroup').style.display = 'none';
+    }
+    incomeModal.classList.remove('hidden');
+});
+document.getElementById('btnCloseIncomeModal').addEventListener('click', () => incomeModal.classList.add('hidden'));
+document.getElementById('btnCancelIncome').addEventListener('click', () => incomeModal.classList.add('hidden'));
+incomeModal.addEventListener('click', (e) => { if (e.target === incomeModal) incomeModal.classList.add('hidden'); });
+incomeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(document.getElementById('incomeAmount').value);
+    const description = document.getElementById('incomeDescription').value.trim();
+    const target = (isAdmin() || currentUser.shared_with) ? document.getElementById('incomeTarget').value : currentUser.username;
+    if (isAdmin() && currentUser.is_admin) {
+        adminBalances[target] = (adminBalances[target] || 0) + amount;
+        await saveBalance(adminBalances[target], target);
+    } else if (currentUser.shared_with) {
+        adminBalances[target] = (adminBalances[target] || 0) + amount;
+        await saveBalance(adminBalances[target], target);
+    } else {
+        userBalance += amount;
+        await saveBalance(userBalance);
+    }
+    incomeModal.classList.add('hidden');
+    updateDashboard();
+    showToast(escapeHtml(description) + ': +' + formatCurrency(amount) + ' adicionado!', 'success');
+});
 
 // ===== SAVINGS =====
 function updateSavingsPanel() {
